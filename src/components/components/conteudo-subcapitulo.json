@@ -1,0 +1,16 @@
+{
+  "collectionName": "components_components_conteudo_subcapitulos",
+  "info": {
+    "displayName": "conteudo subcapitulo",
+    "icon": "archive"
+  },
+  "options": {},
+  "attributes": {
+    "titulo_secao": {
+      "type": "string"
+    },
+    "texto_conteudo": {
+      "type": "richtext"
+    }
+  }
+}

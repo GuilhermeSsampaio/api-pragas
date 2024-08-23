@@ -1,0 +1,30 @@
+{
+  "kind": "collectionType",
+  "collectionName": "artropodes_que_ataca_folhas",
+  "info": {
+    "singularName": "artropodes-que-ataca-folha",
+    "pluralName": "artropodes-que-ataca-folhas",
+    "displayName": "Artrópodes que ataca folha"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "titulo": {
+      "type": "string"
+    },
+    "descricao": {
+      "type": "richtext"
+    },
+    "subtitle": {
+      "type": "string"
+    },
+    "subnivel": {
+      "type": "dynamiczone",
+      "components": [
+        "components.conteudo-subcapitulo"
+      ]
+    }
+  }
+}

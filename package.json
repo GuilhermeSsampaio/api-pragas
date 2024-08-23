@@ -1,0 +1,43 @@
+{
+  "name": "back",
+  "private": true,
+  "version": "0.1.0",
+  "description": "A Strapi application",
+  "scripts": {
+    "develop": "strapi develop",
+    "start": "strapi start",
+    "build": "strapi build",
+    "strapi": "strapi"
+  },
+  "dependencies": {
+    "@datapunt/matomo-tracker-js": "^0.5.1",
+    "@sentry/node": "^7.104.0",
+    "@sklinet/strapi-plugin-video-field": "^1.0.5",
+    "@strapi/plugin-i18n": "4.11.7",
+    "@strapi/plugin-sentry": "^4.0.5",
+    "@strapi/plugin-users-permissions": "4.11.7",
+    "@strapi/provider-email-nodemailer": "^4.13.6",
+    "@strapi/provider-email-sendgrid": "^4.14.5",
+    "@strapi/provider-upload-cloudinary": "^4.12.4",
+    "@strapi/strapi": "4.11.7",
+    "@types/react-helmet": "^6.1.11",
+    "better-sqlite3": "8.0.1",
+    "mariadb": "^3.2.3",
+    "mysql": "^2.18.1",
+    "nvm": "^0.0.4",
+    "pg": "^8.11.2",
+    "strapi-plugin-react-editorjs": "^2.0.2",
+    "strapi-provider-upload-minio-ce": "^1.2.0"
+  },
+  "author": {
+    "name": "A Strapi developer"
+  },
+  "strapi": {
+    "uuid": "1585dc8f-d89a-4599-9c09-6fc588a5eff8"
+  },
+  "engines": {
+    "node": ">=14.19.1 <=16.x.x",
+    "npm": ">=6.0.0"
+  },
+  "license": "MIT"
+}

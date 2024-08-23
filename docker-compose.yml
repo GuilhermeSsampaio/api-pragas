@@ -1,0 +1,192 @@
+version: "3"
+services:
+  strapi:
+    container_name: strapi
+    build: .
+    image: strapi:latest
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:1337"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    env_file: .env
+    environment:
+      DATABASE_CLIENT: ${DATABASE_CLIENT}
+      DATABASE_HOST: strapidb
+      #ATABASE_PORT: ${DATABASE_PORT}
+      DATABASE_NAME: ${DATABASE_NAME}
+      DATABASE_USERNAME: ${DATABASE_USERNAME}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      ADMIN_JWT_SECRET: ${ADMIN_JWT_SECRET}
+      APP_KEYS: ${APP_KEYS}
+      NODE_ENV: ${NODE_ENV}
+      SENTRY_DSN: ${SENTRY_DSN}
+        #MATOMO_SITE_ID: ${MATOMO_SITE_ID}
+        #volumes:
+      #- data_strapi:/opt/app
+      #  - ./config:/opt/app/config
+      #  - ./src:/opt/app/src
+      #  - ./package.json:/opt/package.json
+      #  - ./yarn.lock:/opt/yarn.lock
+      #  - ./.env:/opt/app/.env
+      #  - ./public/uploads:/opt/app/public/uploads
+    ports:
+      - ${STRAPI_PORT}:1337
+    networks:
+      - tecnofam
+        #    extra_hosts:
+            #  - "tecnofam-api.cpao.embrapa.br:minio"
+            #    external_links:
+            #      - minio:tecnofam-api.cpao.embrapa.br
+    depends_on:
+      - strapidb
+
+  minio:
+    container_name: minio
+    image: docker.io/bitnami/minio:2022
+    env_file: .env
+    ports:
+      - ${MINIO_PORT0}:${MINIO_PORT0}
+      - ${MINIO_PORT1}:${MINIO_PORT1}
+    networks:
+      - tecnofam
+    volumes:
+      - 'data_minio:/data'
+    environment:
+      # DATABASE_CLIENT: ${DATABASE_CLIENT}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_DEFAULT_BUCKETS: ${MINIO_DEFAULT_BUCKETS}
+      MINIO_BROWSER: "on"
+      MINIO_OPTS=CORS_ALLOWED_HEADERS: x-requested-with,authorization,Content-Type,Accept,Origin
+      MINIO_OPTS=CORS_ALLOWED_METHODS: GET,PUT,POST,DELETE
+      MINIO_OPTS=CORS_ALLOWED_ORIGINS: https://tecnofam-strapi.cpao.embrapa.br
+    command: /opt/bitnami/minio/bin/minio server --certs-dir /certs --console-address :${MINIO_PORT1} --address :${MINIO_PORT0} /data
+
+  strapidb:
+    container_name: strapidb
+    platform: linux/amd64 #for platform error on Apple M1 chips
+    restart: unless-stopped
+    env_file: .env
+    image: mariadb:latest
+    healthcheck:
+      test: ["CMD-SHELL", "mariadb-admin ping -h localhost -u root -p${DATABASE_PASSWORD}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    environment:
+      MYSQL_USER: ${DATABASE_USERNAME}
+      MYSQL_ROOT_PASSWORD: ${DATABASE_PASSWORD}
+      MYSQL_PASSWORD: ${DATABASE_PASSWORD}
+      MYSQL_DATABASE: ${DATABASE_NAME}
+    volumes:
+      - data_strapidb:/var/lib/mysql
+        # - ./my.cnf:/etc/mysql/my.cnf
+      #- ./data:/var/lib/mysql # if you want to use a bind folder
+    ports:
+      - "3306:3306"
+    networks:
+      - tecnofam
+
+  ## serviços padroes do embrapa io
+  backup:
+    image: mariadb:latest
+    restart: "no"
+    environment:
+      MYSQL_USER: ${DATABASE_USERNAME}
+      MYSQL_ROOT_PASSWORD: ${DATABASE_PASSWORD}
+      MYSQL_PASSWORD: ${DATABASE_PASSWORD}
+      MYSQL_DATABASE: ${DATABASE_NAME}
+    depends_on:
+      - strapidb
+    links:
+      - strapidb
+    volumes:
+      - data_backup:/backup
+      - data_minio:/data
+      # - data_strapi:/var/www/html ??
+    networks:
+      - tecnofam
+    command: >
+      sh -c  "set -ex &&
+        export BACKUP_DIR=${IO_PROJECT}_${IO_APP}_${IO_STAGE}_${IO_VERSION}_$$(date +'%Y-%m-%d_%H-%M-%S') &&
+        cd /backup && mkdir $$BACKUP_DIR &&
+        mariadb-dump --host strapidb -uroot -p${DATABASE_PASSWORD} ${DATABASE_NAME} > $$BACKUP_DIR/strapidb.sql &&
+        cp -R /data/ $$BACKUP_DIR/ &&        
+        tar -czf $$BACKUP_DIR.tar.gz $$BACKUP_DIR &&
+        rm -rf /backup/$$BACKUP_DIR"
+    profiles:
+      - cli
+
+  restore:
+    image: mariadb:latest
+    restart: "no"
+    environment:
+      MYSQL_USER: ${DATABASE_USERNAME}
+      MYSQL_ROOT_PASSWORD: ${DATABASE_PASSWORD}
+      MYSQL_PASSWORD: ${DATABASE_PASSWORD}
+      MYSQL_DATABASE: ${DATABASE_NAME}
+    depends_on:
+      - strapidb
+    links:
+      - strapidb
+    volumes:
+      - data_backup:/backup
+      - data_minio:/data
+        #- data_strapi:/var/lib/mysql
+    networks:
+      - tecnofam
+    command: >
+      sh -c  "set -ex &&
+        export FILE_TO_RESTORE=${BACKUP_FILE_TO_RESTORE:-no_file_to_restore} &&
+        test -f /backup/$$FILE_TO_RESTORE &&
+        RESTORE_DIR=$$(mktemp) &&
+        tar -xf /backup/$$FILE_TO_RESTORE -C $$RESTORE_DIR --strip-components=1 &&
+        mariadb --host strapidb -uroot -p${DATABASE_PASSWORD} ${DATABASE_NAME} < $$RESTORE_DIR/strapidb.sql &&
+        cp -Rf $$RESTORE_DIR/data/. /data/ &&
+        find /data/ -type d -exec chmod 755 {} \; &&
+        find /data/ -type f -exec chmod 644 {} \; &&
+        rm -rf $$RESTORE_DIR"
+    profiles:
+      - cli
+
+  sanitize:
+    image: mariadb:latest
+    restart: "no"
+    depends_on:
+      - strapidb
+    links:
+      - strapidb
+    networks:
+      - tecnofam
+    command: >
+      sh -c  "mariadb-check --host strapidb -uroot -p${DATABASE_PASSWORD} -o --auto-repair --flush ${DATABASE_NAME}"
+    profiles:
+      - cli
+
+
+volumes:
+  data_minio:
+    name: ${DATA_MINIO}
+    external: true
+  data_strapidb:
+    name: ${DATA_STRAPIDB}
+    external: true
+
+      #data_strapi:
+      #name: ${DATA_STRAPI}
+      # external: true
+
+  data_backup:
+    name: ${BACKUP}
+    external: true
+
+networks:
+  tecnofam:
+    external: true
+    driver: bridge
+    name: ${IO_PROJECT}_${IO_APP}_${IO_STAGE}
